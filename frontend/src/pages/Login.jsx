@@ -16,7 +16,9 @@ const Login = () => {
     try {
       const response = await api.post('/v1/auth/login', { email, password });
       localStorage.setItem('token', response.data.token);
-      navigate('/dashboard');
+      // Fetch profile to determine role-based redirect
+      const profile = await api.get('/v1/user/profile');
+      navigate(profile.data.role === 'ADMIN' ? '/admin' : '/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to login');
     } finally {
