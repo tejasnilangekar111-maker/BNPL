@@ -20,6 +20,10 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (profile?.role === 'ADMIN') navigate('/admin');
+  }, [profile]);
+
   const fetchData = async () => {
     try {
       const [profileRes, ordersRes] = await Promise.all([
