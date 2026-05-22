@@ -10,4 +10,5 @@ import java.util.List;
 @Repository
 public interface EmiScheduleRepository extends JpaRepository<EmiSchedule, Long> {
     List<EmiSchedule> findByBnplPlanPlanIdAndStatus(Long planId, EmiStatus status);
+    long countByStatus(EmiStatus status);
 }
