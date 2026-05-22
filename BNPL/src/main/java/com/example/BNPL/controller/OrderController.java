@@ -76,6 +76,7 @@ public class OrderController {
             if (plan.getEmiSchedules() != null) {
                 builder.emiSchedule(plan.getEmiSchedules().stream()
                         .map(emi -> OrderResponse.EmiEntry.builder()
+                                .scheduleId(emi.getScheduleId())
                                 .emiNumber(emi.getEmiNumber())
                                 .dueDate(emi.getDueDate())
                                 .amount(emi.getAmount())

@@ -28,6 +28,7 @@ public class OrderResponse {
     @Data
     @Builder
     public static class EmiEntry {
+        private Long scheduleId;
         private Integer emiNumber;
         private LocalDate dueDate;
         private BigDecimal amount;

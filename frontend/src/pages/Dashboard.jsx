@@ -8,6 +8,10 @@ const Dashboard = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showApplyForm, setShowApplyForm] = useState(false);
+  const [payModal, setPayModal] = useState(null); // { scheduleId, amount, emiNumber }
+  const [payMethod, setPayMethod] = useState('UPI');
+  const [payLoading, setPayLoading] = useState(false);
+  const [payResult, setPayResult] = useState(null); // { success, message, transactionId }
   const [applyForm, setApplyForm] = useState({ amount: '', tenureMonths: '3' });
   const [applyLoading, setApplyLoading] = useState(false);
   const [applyError, setApplyError] = useState('');
@@ -68,6 +72,19 @@ const Dashboard = () => {
     }
   };
 
+  const handlePayment = async () => {
+    setPayLoading(true);
+    try {
+      const res = await api.post(`/v1/payments/${payModal.scheduleId}`, { paymentMethod: payMethod });
+      setPayResult({ success: true, message: res.data.message, transactionId: res.data.transactionId });
+      fetchData();
+    } catch (err) {
+      setPayResult({ success: false, message: err.response?.data?.message || 'Payment failed. Please try again.' });
+    } finally {
+      setPayLoading(false);
+    }
+  };
+
   const getCreditLabel = (score) => {
     if (score >= 750) return { label: 'Excellent', color: '#22c55e' };
     if (score >= 700) return { label: 'Good', color: '#84cc16' };
@@ -103,6 +120,72 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard">
+      {/* Payment Modal */}
+      {payModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
+        }}>
+          <div className="glass-effect" style={{ width: '100%', maxWidth: '420px', borderRadius: '20px', padding: '2rem' }}>
+            {payResult ? (
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>{payResult.success ? '✅' : '❌'}</p>
+                <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{payResult.success ? 'Payment Successful!' : 'Payment Failed'}</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: payResult.transactionId ? '0.5rem' : '1.5rem' }}>{payResult.message}</p>
+                {payResult.transactionId && (
+                  <p style={{ fontSize: '0.75rem', color: '#a5b4fc', marginBottom: '1.5rem' }}>
+                    Txn ID: {payResult.transactionId}
+                  </p>
+                )}
+                <button className="btn-primary" style={{ marginTop: 0 }} onClick={() => { setPayModal(null); setPayResult(null); }}>
+                  Close
+                </button>
+              </div>
+            ) : (
+              <>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: '600', marginBottom: '0.25rem' }}>Pay EMI #{payModal.emiNumber}</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+                  Amount: <strong style={{ color: 'var(--text-main)' }}>₹{parseFloat(payModal.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                </p>
+                <div className="input-group">
+                  <label>Payment Method</label>
+                  <select
+                    value={payMethod}
+                    onChange={e => setPayMethod(e.target.value)}
+                    style={{
+                      width: '100%', padding: '0.875rem 1rem', borderRadius: '12px',
+                      border: '1px solid var(--surface-border)', background: 'var(--input-bg)',
+                      color: 'var(--text-main)', fontSize: '1rem', fontFamily: 'inherit'
+                    }}
+                  >
+                    <option value="UPI">UPI</option>
+                    <option value="CARD">Card</option>
+                    <option value="NETBANKING">Net Banking</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                  <button
+                    className="btn-secondary"
+                    style={{ flex: 1, padding: '0.875rem' }}
+                    onClick={() => { setPayModal(null); setPayResult(null); }}
+                    disabled={payLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn-primary"
+                    style={{ flex: 2, marginTop: 0 }}
+                    onClick={handlePayment}
+                    disabled={payLoading}
+                  >
+                    {payLoading ? 'Processing...' : `Pay ₹${parseFloat(payModal.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {/* Navbar */}
       <nav className="navbar glass-effect">
         <h1>FlexiPay</h1>
@@ -293,6 +376,7 @@ const Dashboard = () => {
                               <th style={{ textAlign: 'left', padding: '0.5rem 0.75rem', fontWeight: '500' }}>Due Date</th>
                               <th style={{ textAlign: 'right', padding: '0.5rem 0.75rem', fontWeight: '500' }}>Amount</th>
                               <th style={{ textAlign: 'center', padding: '0.5rem 0.75rem', fontWeight: '500' }}>Status</th>
+                              <th style={{ textAlign: 'center', padding: '0.5rem 0.75rem', fontWeight: '500' }}>Action</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -310,6 +394,22 @@ const Dashboard = () => {
                                   }}>
                                     {emi.status}
                                   </span>
+                                </td>
+                                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                                  {emi.status === 'PENDING' || emi.status === 'OVERDUE' ? (
+                                    <button
+                                      onClick={() => { setPayModal({ scheduleId: emi.scheduleId, amount: emi.amount, emiNumber: emi.emiNumber }); setPayResult(null); }}
+                                      style={{
+                                        padding: '0.3rem 0.85rem', borderRadius: '8px', border: 'none',
+                                        background: 'var(--primary-color)', color: 'white', fontSize: '0.8rem',
+                                        fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit'
+                                      }}
+                                    >
+                                      Pay Now
+                                    </button>
+                                  ) : (
+                                    <span style={{ color: '#22c55e', fontSize: '0.8rem' }}>✓ Paid</span>
+                                  )}
                                 </td>
                               </tr>
                             ))}
