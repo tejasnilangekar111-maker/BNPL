@@ -1,0 +1,30 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/bnpl_db
+    username: postgres
+    password: Shreyas@123
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+jwt:
+  secret: "BnplSecretKeyForFlexiPaySystemChangeInProduction123456"
+  expiration: 86400000 # 1 day
+
+bnpl:
+  min-credit-score: 600
+  max-debt-to-income: 0.50
