@@ -3,11 +3,12 @@ import com.example.BNPL.dto.RegisterRequest;
 import com.example.BNPL.entity.User;
 import com.example.BNPL.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.userdetails.UserDetails;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.lang.NonNull;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -17,6 +18,7 @@ public class UserService {
 
     @SuppressWarnings("null")
     public User register(RegisterRequest req) {
+        log.debug("Creating new user account for email: {}", req.getEmail());
         User user = User.builder()
                 .email(req.getEmail())
                 .phone(req.getPhone())
@@ -25,19 +27,20 @@ public class UserService {
                 .monthlyIncome(req.getMonthlyIncome())
                 .creditScore(650) // default starting score
                 .build();
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        log.info("New user saved to DB - userId: {}, email: {}", saved.getUserId(), saved.getEmail());
+        return saved;
     }
 
     public void updateCreditScore(@NonNull Long userId) {
+        log.info("Updating credit score for userId: {}", userId);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        // Recalculate based on history
+        int oldScore = user.getCreditScore();
         int newScore = creditScoringService.calculateCreditScore(user, user.getCreditHistories());
         user.setCreditScore(newScore);
         userRepository.save(user);
+        log.info("Credit score updated for userId: {} - {} -> {}", userId, oldScore, newScore);
     }
 
-    public UserDetails loadUserByUsername(String email) {
-
-    }
 }

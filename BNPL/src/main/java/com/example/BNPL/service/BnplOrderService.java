@@ -5,6 +5,7 @@ import com.example.BNPL.dto.EmiCalculationResponse;
 import com.example.BNPL.entity.*;
 import com.example.BNPL.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
@@ -12,6 +13,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BnplOrderService {
@@ -26,20 +28,30 @@ public class BnplOrderService {
 
     @Transactional
     public Order processOrder(CreateOrderRequest req, String userEmail) {
+        log.info("Processing BNPL order for user: {}, amount: {}, tenure: {} months",
+                userEmail, req.getAmount(), req.getTenureMonths());
+
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         // Risk check
+        log.debug("Running risk assessment for userId: {}, creditScore: {}", user.getUserId(), user.getCreditScore());
         if (!riskService.isApproved(user, req)) {
+            log.warn("Order REJECTED for userId: {} - risk assessment failed (creditScore: {}, amount: {})",
+                    user.getUserId(), user.getCreditScore(), req.getAmount());
             throw new RuntimeException("Order rejected: Risk assessment failed");
         }
 
         // Determine interest rate based on score
         BigDecimal interestRate = riskService.determineInterestRate(user.getCreditScore());
+        log.info("Interest rate determined: {}% p.a. for userId: {} (creditScore: {})",
+                interestRate, user.getUserId(), user.getCreditScore());
 
         // Calculate EMI details
         EmiCalculationResponse emiResp = emiService.calculateEmi(
                 req.getAmount(), interestRate, req.getTenureMonths());
+        log.info("EMI calculated - monthly: {}, totalPayable: {}, totalInterest: {}",
+                emiResp.getMonthlyEmi(), emiResp.getTotalPayable(), emiResp.getTotalInterest());
 
         // Create Order
         Order order = Order.builder()
@@ -48,6 +60,7 @@ public class BnplOrderService {
                 .status(OrderStatus.APPROVED)
                 .build();
         order = orderRepository.save(order);
+        log.info("Order APPROVED - orderId: {}, userId: {}", order.getOrderId(), user.getUserId());
 
         // Create BNPL Plan
         BnplPlan plan = BnplPlan.builder()
@@ -58,10 +71,11 @@ public class BnplOrderService {
                 .emiAmount(emiResp.getMonthlyEmi())
                 .build();
         plan = planRepository.save(plan);
+        log.debug("BNPL plan created - planId: {}, orderId: {}", plan.getPlanId(), order.getOrderId());
 
         // Generate EMI Schedule
         List<EmiSchedule> schedules = new ArrayList<>();
-        LocalDate startDate = LocalDate.now().plusMonths(1).withDayOfMonth(1); // first of next month
+        LocalDate startDate = LocalDate.now().plusMonths(1).withDayOfMonth(1);
         for (int i = 0; i < req.getTenureMonths(); i++) {
             EmiSchedule sch = EmiSchedule.builder()
                     .bnplPlan(plan)
@@ -73,14 +87,17 @@ public class BnplOrderService {
             schedules.add(sch);
         }
         emiScheduleRepository.saveAll(schedules);
+        log.info("EMI schedule generated - {} instalments created for planId: {}",
+                schedules.size(), plan.getPlanId());
 
         // Log credit history for new loan
         creditHistoryRepository.save(java.util.Objects.requireNonNull(CreditHistory.builder()
                 .user(user)
                 .transactionType(TransactionType.NEW_LOAN)
                 .amount(req.getAmount())
-                .impactOnScore(-5) // slight dip for new credit inquiry
+                .impactOnScore(-5)
                 .build()));
+        log.debug("Credit history logged - NEW_LOAN event for userId: {}, scoreImpact: -5", user.getUserId());
 
         order.setBnplPlan(plan);
         return order;

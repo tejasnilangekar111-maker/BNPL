@@ -1,7 +1,7 @@
 package com.example.BNPL.entity;
 
 import jakarta.persistence.*;
-import jakarta.persistence.criteria.Order;
+import com.example.BNPL.entity.Order;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

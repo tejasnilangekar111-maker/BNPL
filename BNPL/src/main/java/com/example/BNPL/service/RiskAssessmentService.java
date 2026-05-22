@@ -3,11 +3,13 @@ package com.example.BNPL.service;
 import com.example.BNPL.dto.CreateOrderRequest;
 import com.example.BNPL.entity.User;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RiskAssessmentService {
@@ -19,26 +21,38 @@ public class RiskAssessmentService {
     private double maxDebtToIncome;
 
     public boolean isApproved(User user, CreateOrderRequest request) {
-        // 1. Credit Score check
-        if (user.getCreditScore() < minCreditScore) return false;
+        log.debug("Assessing risk - userId: {}, creditScore: {}, amount: {}, tenure: {}",
+                user.getUserId(), user.getCreditScore(), request.getAmount(), request.getTenureMonths());
 
-        // 2. Affordability: EMI should not exceed maxDebtToIncome * monthlyIncome
-        if (user.getMonthlyIncome() == null) return false;
+        if (user.getCreditScore() < minCreditScore) {
+            log.warn("Risk check FAILED - creditScore {} below minimum {}", user.getCreditScore(), minCreditScore);
+            return false;
+        }
 
-        // Rough EMI estimate (simplified – real calc happens in EmiCalculationService)
+        if (user.getMonthlyIncome() == null) {
+            log.warn("Risk check FAILED - monthly income not set for userId: {}", user.getUserId());
+            return false;
+        }
+
         BigDecimal estimatedEmi = request.getAmount()
                 .divide(BigDecimal.valueOf(request.getTenureMonths()), 2, RoundingMode.HALF_UP);
 
         BigDecimal maxAllowedEmi = user.getMonthlyIncome()
                 .multiply(BigDecimal.valueOf(maxDebtToIncome));
 
-        return estimatedEmi.compareTo(maxAllowedEmi) <= 0;
+        boolean approved = estimatedEmi.compareTo(maxAllowedEmi) <= 0;
+        log.info("Risk check {} - estimatedEmi: {}, maxAllowedEmi: {}, userId: {}",
+                approved ? "PASSED" : "FAILED", estimatedEmi, maxAllowedEmi, user.getUserId());
+        return approved;
     }
 
     public BigDecimal determineInterestRate(int creditScore) {
-        if (creditScore >= 750) return BigDecimal.ZERO;       // 0%
-        if (creditScore >= 700) return new BigDecimal("8.5"); // 8.5% p.a.
-        if (creditScore >= 650) return new BigDecimal("14.0");
-        return new BigDecimal("24.0"); // high risk
+        BigDecimal rate;
+        if (creditScore >= 750) rate = BigDecimal.ZERO;
+        else if (creditScore >= 700) rate = new BigDecimal("8.5");
+        else if (creditScore >= 650) rate = new BigDecimal("14.0");
+        else rate = new BigDecimal("24.0");
+        log.debug("Interest rate for creditScore {}: {}%", creditScore, rate);
+        return rate;
     }
 }

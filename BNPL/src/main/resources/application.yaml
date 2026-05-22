@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/bnpl_db
     username: postgres
-    password: Shreyas@123
+    password: postgres
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
